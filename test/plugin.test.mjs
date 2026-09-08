@@ -101,3 +101,15 @@ test("a confirmed native task edit is acknowledged independently of a later view
   assert.match(refresh.message,/View temporarily/);
   assert.equal(app.calls.filter(call=>call[0]==='updateTask').length,1);
 });
+
+test("link navigation uses the host API, reports rejection and rejects executable protocols",async()=>{
+  const app=host(),plugin=createPlugin();app.navigate=async url=>{app.calls.push(['navigate',url]);return true;};
+  const good=await plugin.onEmbedCall(app,'openLink',{noteUUID:uuid,url:'https://example.com/help'});
+  assert.equal(good.ok,true);assert.equal(good.opened,true);
+  assert.deepEqual(app.calls,[['navigate','https://example.com/help']]);
+  const bad=await plugin.onEmbedCall(app,'openLink',{noteUUID:uuid,url:'javascript:alert(1)'});
+  assert.equal(bad.ok,false);assert.equal(app.calls.length,1);
+  app.navigate=async()=>false;
+  const rejected=await plugin.onEmbedCall(app,'openLink',{noteUUID:uuid,url:'https://example.com/help'});
+  assert.equal(rejected.ok,false);assert.match(rejected.message,/could not open/);
+});

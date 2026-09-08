@@ -81,6 +81,12 @@ export function createPlugin() {
     if(action==="refresh")return {data:await view(app,uuid)};
     if(action==="recover"){const result=await service.recover(app,uuid);if(!result.restored)throw Error("Some task dates still need restoration. Review the pending save before editing.");return {changed:true};}
     if(action==="acknowledgeRecovery"){await service.acknowledgeRecovery(app,uuid);return {changed:true};}
+    if(action==="openLink") {
+      const url=new URL(String(request.url));
+      if(!["https:","http:","mailto:"].includes(url.protocol))throw Error("This link uses an unsupported protocol.");
+      if(await app.navigate(url.href)!==true)throw Error("Amplenote could not open this URL.");
+      return {opened:true};
+    }
     if(action==="peekNote") {
       const linkedUUID=Core.noteLinkUuid(request.url);
       if(!linkedUUID)throw Error("This link is not an Amplenote note.");

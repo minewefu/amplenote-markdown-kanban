@@ -134,6 +134,9 @@ function cardNode(card, column) {
       } else if (link.href.startsWith("https://www.amplenote.com/notes/")) {
         event.preventDefault();
         call("peekNote",{url:link.href},{update:false}).catch(showError);
+      } else {
+        event.preventDefault();
+        call("openLink",{url:link.href},{update:false}).catch(showError);
       }
     } else showTaskEditor(card);
   });
