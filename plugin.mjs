@@ -78,25 +78,26 @@ export function createPlugin() {
   }
   async function dispatch(app, action, request) {
     const uuid=request.noteUUID;
-    if(action==="refresh")return view(app,uuid);
-    if(action==="recover"){await service.recover(app,uuid);return view(app,uuid);}
-    if(action==="acknowledgeRecovery"){await service.acknowledgeRecovery(app,uuid);return view(app,uuid);}
+    if(action==="refresh")return {data:await view(app,uuid)};
+    if(action==="recover"){const result=await service.recover(app,uuid);if(!result.restored)throw Error("Some task dates still need restoration. Review the pending save before editing.");return {changed:true};}
+    if(action==="acknowledgeRecovery"){await service.acknowledgeRecovery(app,uuid);return {changed:true};}
     if(action==="peekNote") {
       const linkedUUID=Core.noteLinkUuid(request.url);
       if(!linkedUUID)throw Error("This link is not an Amplenote note.");
       const opened=await app.openSidebarEmbed({aspectRatio:0.8,id:"kanban-note-preview"},"peek",linkedUUID);
       if(!opened)await app.navigate(request.url);
-      return null;
+      return {opened:true};
     }
     if(action==="richFootnote") {
       const html=renderRichDescription(request.description);
       const opened=await app.openSidebarEmbed({aspectRatio:0.8,id:"kanban-footnote"},"rich",uuid,{html,title:request.label,href:request.href});
       if(!opened)throw Error("Open this rich footnote from the source note on mobile.");
-      return null;
+      return {opened:true};
     }
     let snapshot=await service.snapshot(app,uuid);
     Core.assertFresh(request.expected,snapshot.source);
     if(snapshot.pending)throw Error("Restore and review the interrupted save before editing.");
+    let createdTaskId=null;
     if(action==="settings") {
       if(!["locale","iso","relative"].includes(request.dateFormat))throw Error("Choose a supported date format.");
       await saveConfig(app,uuid,{...config(app,uuid),dateFormat:request.dateFormat});
@@ -118,6 +119,7 @@ export function createPlugin() {
       const target=snapshot.board.columns.find(column=>column.id===request.columnId);
       if(limit && target?.cards.filter(card=>!card.checked).length>=limit)throw Error("This column has reached its open-card limit.");
       const taskId=await app.insertTask({uuid},{content:request.content,startAt:request.startAt});
+      createdTaskId=taskId;
       try {
         snapshot=await service.snapshot(app,uuid);
         const column=Core.columnKeys(snapshot.board).find(column=>column.key===key);
@@ -147,11 +149,11 @@ export function createPlugin() {
       let note;
       if(action==="labelCard") {
         const answer=await app.prompt("Link a note to this card",{inputs:[{type:"note",label:"Note"}]});
-        if(!answer)return view(app,uuid);
+        if(!answer)return {cancelled:true};
         note=await app.notes.find(Array.isArray(answer)?answer[0]:answer);
       } else {
         const name=await app.prompt("Name for the note",{inputs:[{type:"text",label:"Name",value:task.content.split("\n")[0].slice(0,100)}]});
-        if(!name)return view(app,uuid);
+        if(!name)return {cancelled:true};
         const title=Array.isArray(name)?name[0]:name;
         Core.assertFresh(request.expected,await app.getNoteContent({uuid}));
         note=await app.notes.create(String(title),[]);
@@ -162,7 +164,7 @@ export function createPlugin() {
       Core.assertFresh(request.expected,await app.getNoteContent({uuid}));
       await updateTask(app,request.cardId,{content:appendNoteLink(task.content,note.name,note.uuid)});
     } else throw Error("Unknown board action.");
-    return view(app,uuid);
+    return {changed:true,createdTaskId};
   }
   return {
     noteOption:{"Open Kanban":async function(app,uuid){await open(app,uuid);}},
@@ -191,7 +193,7 @@ export function createPlugin() {
         authorized=true;
         if(busy.has(uuid))throw Error("A command for this board is already running.");
         busy.add(uuid);
-        try{return {ok:true,data:await dispatch(app,action,request)};}finally{busy.delete(uuid);}
+        try{return {ok:true,...await dispatch(app,action,request)};}finally{busy.delete(uuid);}
       } catch(error) {
         let pending=null,data=null;
         if(authorized){try{pending=service.pending(app,uuid);}catch{}if(error?.createdTaskId){try{data=await view(app,uuid);}catch{}}}

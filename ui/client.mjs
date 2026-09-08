@@ -62,12 +62,25 @@ async function call(action, args = {}, { update = true } = {}) {
       else if(result?.pending && update){state.pending=result.pending;render();}
       throw Error(result?.message || "The action could not be completed.");
     }
+    if (result.changed && update) {
+      if(result.createdTaskId){byId("card-id").value=result.createdTaskId;byId("editor-title").textContent="Edit card";}
+      // A write acknowledgment and a board refresh are separate host calls.
+      // Rendering failure must not turn a confirmed save into a duplicate retry.
+      try {
+        const refreshed=await window.callAmplenotePlugin("refresh",{noteUUID:state.note.uuid});
+        if(!refreshed?.ok || !refreshed.data)throw Error(refreshed?.message || "The refreshed board was unavailable.");
+        state=refreshed.data;render();
+      } catch(error) {
+        state.loading=true;
+        showError("Saved. The board could not refresh yet; use Refresh before making another change. "+(error?.message??String(error)));
+      }
+    }
     if (result.data && update) { state = result.data; render(); }
     return result;
   } finally {
     saving = false;
-    status.textContent = state.pending ? "Save needs review" : "Up to date";
-    document.querySelectorAll("[data-write]").forEach(node=>node.disabled=false);
+    status.textContent = state.loading ? "Saved — refresh needed" : state.pending ? "Save needs review" : "Up to date";
+    document.querySelectorAll("[data-write]").forEach(node=>node.disabled=!!state.loading && node.id!=="refresh");
   }
 }
 function showTaskEditor(card, column) {
@@ -213,8 +226,8 @@ byId("save-card").addEventListener("click",event=>{
   const start = byId("card-start").value;
   call(byId("card-id").value?"edit":"add",{cardId:byId("card-id").value,columnId:byId("card-column").value,content:byId("card-markdown").value,startAt:start?Math.floor(new Date(start).getTime()/1000):null}).then(()=>editor.close()).catch(showError);
 });
-byId("link-note").addEventListener("click",()=>call("labelCard",{cardId:byId("card-id").value}).then(()=>editor.close()).catch(showError));
-byId("create-note").addEventListener("click",()=>call("noteFromCard",{cardId:byId("card-id").value}).then(()=>editor.close()).catch(showError));
+byId("link-note").addEventListener("click",()=>call("labelCard",{cardId:byId("card-id").value}).then(result=>{if(!result.cancelled)editor.close();}).catch(showError));
+byId("create-note").addEventListener("click",()=>call("noteFromCard",{cardId:byId("card-id").value}).then(result=>{if(!result.cancelled)editor.close();}).catch(showError));
 byId("save-column").addEventListener("click",event=>{
   event.preventDefault();
   call(byId("column-id").value?"editColumn":"addColumn",{columnId:byId("column-id").value,title:byId("column-title").value,limit:Number(byId("column-limit").value)}).then(()=>columnDialog.close()).catch(showError);

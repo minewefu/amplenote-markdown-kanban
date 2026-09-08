@@ -64,7 +64,9 @@ test("a stale editor save is rejected before native task updates",async()=>{
 test("settings accept only supported date formats and tolerate native null records",async()=>{
   const app=host();app.settings['kanban.board.'+uuid]='null';const plugin=createPlugin();
   const good=await plugin.onEmbedCall(app,'settings',{noteUUID:uuid,expected:app.source(),dateFormat:'iso'});
-  assert.equal(good.ok,true,good.message);assert.equal(good.data.settings.dateFormat,'iso');
+  assert.equal(good.ok,true,good.message);assert.equal(good.changed,true);
+  const refreshed=await plugin.onEmbedCall(app,'refresh',{noteUUID:uuid});
+  assert.equal(refreshed.data.settings.dateFormat,'iso');
   const bad=await plugin.onEmbedCall(app,'settings',{noteUUID:uuid,expected:app.source(),dateFormat:'script'});
   assert.equal(bad.ok,false);
 });
@@ -86,4 +88,16 @@ test("a post-insertion read failure reports the existing task ID for safe editin
   assert.equal(result.createdTaskId,createdId);
   assert.match(result.message,/card was created/);
   assert.equal(inserted,1);
+});
+
+test("a confirmed native task edit is acknowledged independently of a later view failure",async()=>{
+  const app=host(),plugin=createPlugin();
+  app.updateTask=async(id,updates)=>{app.calls.push(['updateTask',id,updates]);app.getNoteContent=async()=>{throw Error('View temporarily unavailable');};return true;};
+  const result=await plugin.onEmbedCall(app,'edit',{noteUUID:uuid,expected:app.source(),cardId:taskId,content:'Edited card',startAt:null});
+  assert.equal(result.ok,true,result.message);
+  assert.equal(result.changed,true);
+  const refresh=await plugin.onEmbedCall(app,'refresh',{noteUUID:uuid});
+  assert.equal(refresh.ok,false);
+  assert.match(refresh.message,/View temporarily/);
+  assert.equal(app.calls.filter(call=>call[0]==='updateTask').length,1);
 });

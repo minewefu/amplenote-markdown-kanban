@@ -158,9 +158,10 @@ export function createBoardService() {
         if (failures.length) throw new BoardError("Some hidden dates still need restoration: " + failures.map(item => item.uuid).join(", "));
         const afterTasks = await readTasks(app, uuid);
         assertTasksPreserved(before.tasks, afterTasks);
-        assertSourceDates(await app.getNoteContent({ uuid }), afterTasks);
+        const afterSource = await app.getNoteContent({ uuid });
+        assertSourceDates(afterSource, afterTasks);
         await saveJournal(app, uuid, null);
-        return snapshot(app, uuid);
+        return { note: before.note, source: afterSource, board: parseBoard(afterSource), tasks: afterTasks, pending: null };
       } catch (error) {
         if (!writeStarted) {
           await saveJournal(app, uuid, null);
