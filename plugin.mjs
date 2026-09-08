@@ -55,9 +55,9 @@ export function createPlugin() {
     return column;
   };
   const nativeTask = async (app, uuid, taskId) => {
-    const task = await app.getTask(taskId);
+    const task = (await app.getNoteTasks({uuid},{includeDone:true})).find(task=>task.uuid===taskId);
     if (!task || task.noteUUID!==uuid) throw Error("This task no longer belongs to the board.");
-    return task;
+    return JSON.parse(JSON.stringify(task));
   };
   const updateTask = async (app, taskId, updates) => { if(await app.updateTask(taskId,updates)!==true)throw Error("Amplenote could not update the task."); };
   async function move(app, uuid, snapshot, taskId, columnId, beforeCardId) {

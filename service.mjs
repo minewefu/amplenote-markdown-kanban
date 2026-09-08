@@ -1,12 +1,42 @@
-import { BoardError, parseBoard, applyEdits, assertFresh, validateWrite } from "./core.mjs";
+import { BoardError, parseBoard, applyEdits, assertFresh, validateWrite, markdownLinkTargets, noteLinkUuid } from "./core.mjs";
 
 const stableFields = ["uuid", "createdAt", "content", "completedAt", "dismissedAt", "startAt", "endAt", "deadline", "hideUntil", "urgent", "important", "isRepeating", "repeat", "victoryValue", "isParent"];
 const value = (task, key) => task[key] ?? null;
 const sameIdentity = (a, b) => a?.uuid === b?.uuid && a?.createdAt === b?.createdAt;
 export const journalKey = uuid => `kanban.pending.${uuid}`;
 
+export async function canonicalTaskContent(app,content,cache=new Map()) {
+  if(typeof content!=="string")throw new BoardError("A task returned invalid content.");
+  const edits=[];
+  for(const target of markdownLinkTargets(content)){
+    const id=noteLinkUuid(target.url);
+    if(!id?.startsWith("local-"))continue;
+    if(!cache.has(id))cache.set(id,app.notes.find(id));
+    const resolved=await cache.get(id);
+    if(!resolved?.uuid || resolved.uuid.startsWith("local-"))continue;
+    const url=new URL(target.url);
+    url.pathname="/notes/"+resolved.uuid+(url.pathname.endsWith("/")?"/":"");
+    if(!noteLinkUuid(url.href))throw new BoardError("A note alias resolved to an invalid identity.");
+    edits.push({start:target.start,end:target.end,text:url.href});
+  }
+  return applyEdits(content,edits);
+}
+
+async function assertNativeTasksPreserved(app,before,after) {
+  const left=JSON.parse(JSON.stringify(before)),right=JSON.parse(JSON.stringify(after)),cache=new Map();
+  const index=new Map(right.map(task=>[task.uuid,task]));
+  for(const task of left){
+    const other=index.get(task.uuid);
+    if(other&&task.content!==other.content){
+      task.content=await canonicalTaskContent(app,task.content,cache);
+      other.content=await canonicalTaskContent(app,other.content,cache);
+    }
+  }
+  assertTasksPreserved(left,right);
+}
+
 async function readTasks(app, uuid) {
-  const inventory = await app.getNoteTasks({ uuid }, { includeDone: true });
+  const inventory = JSON.parse(JSON.stringify(await app.getNoteTasks({ uuid }, { includeDone: true })));
   if (!Array.isArray(inventory) || new Set(inventory.map(task => task.uuid)).size !== inventory.length) throw new BoardError("The task inventory is inconsistent. Refresh before saving.");
   const tasks = [];
   // Neither API alone proves that dates persisted. Require both to agree.
@@ -17,8 +47,10 @@ async function readTasks(app, uuid) {
       tasks.push(JSON.parse(JSON.stringify(task)));
     }
   }
-  assertTasksPreserved(inventory, tasks);
-  return tasks;
+  await assertNativeTasksPreserved(app,inventory,tasks);
+  // The note collection owns the current Markdown spelling. Individual task
+  // caches can still spell a resolved note link with its former local alias.
+  return inventory;
 }
 
 function sourceTask(source, uuid) {
@@ -157,7 +189,7 @@ export function createBoardService() {
         const failures = await restoreHidden(app, uuid, journal);
         if (failures.length) throw new BoardError("Some hidden dates still need restoration: " + failures.map(item => item.uuid).join(", "));
         const afterTasks = await readTasks(app, uuid);
-        assertTasksPreserved(before.tasks, afterTasks);
+        await assertNativeTasksPreserved(app,before.tasks,afterTasks);
         const afterSource = await app.getNoteContent({ uuid });
         assertSourceDates(afterSource, afterTasks);
         await saveJournal(app, uuid, null);

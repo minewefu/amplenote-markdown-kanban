@@ -252,6 +252,33 @@ export function markdownImages(markdown) {
   return images;
 }
 
+/** Destination spans only; labels, titles and code examples are not rewritten. */
+export function markdownLinkTargets(markdown) {
+  const targets=[];
+  const visit=node=>{
+    if(node.type==="link"){
+      const [start,end]=offset(node),raw=markdown.slice(start,end);
+      let urlStart=-1;
+      if(raw===node.url)urlStart=start;
+      else if(raw==="<"+node.url+">")urlStart=start+1;
+      else {
+        const labelEnd=node.children?.at(-1)?.position.end.offset??start+1;
+        const delimiter=markdown.indexOf("](",labelEnd);
+        if(delimiter>=start&&delimiter<end){
+          let index=delimiter+2;
+          while(index<end&&/\s/.test(markdown[index]))index++;
+          if(markdown[index]==="<")index++;
+          if(markdown.slice(index,index+node.url.length)===node.url)urlStart=index;
+        }
+      }
+      if(urlStart>=0)targets.push({url:node.url,start:urlStart,end:urlStart+node.url.length});
+    }
+    for(const child of node.children??[])visit(child);
+  };
+  visit(parser.parse(markdown));
+  return targets;
+}
+
 export function noteLinkUuid(url) {
   try {
     const parsed = new URL(url);

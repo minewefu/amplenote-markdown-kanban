@@ -4,7 +4,7 @@ Development checkpoint: September 8, 2026. This is not a claim of full interface
 
 ## Verified
 
-- 60 local tests pass on Node.js 24 on Windows.
+- 62 local tests pass on Node.js 24 on Windows.
 - The complete generated plugin initializes in an isolated environment without a DOM.
 - The write service, installed in Amplenote, moved an original card through three headings while retaining all three control-task IDs and their dates.
 - A deliberate failure of hidden-date restoration preserved all tasks and a durable recovery record. A fresh service invocation read that record and restored the date; review acknowledgment cleared it.
@@ -19,6 +19,8 @@ The remaining live matrix includes card creation/editing, dates, drag and keyboa
 A rich-footnote sidebar rendered its formatted description successfully. Ordinary popup navigation was blocked by the iframe sandbox; host-mediated URL navigation is being tested and must not yet be treated as fully verified.
 
 Automatic completion on moving into Done and reopening preserved the original task identity. An existing note was linked successfully. Native note creation exposed temporary `local-` note IDs; current code uses the host's note-URL API and resolves supported aliases. Alias handling, custom date patterns and bottom-of-card image previews need the remaining live tests.
+
+Creating and linking a new note now works with the temporary ID. When that ID resolves, task APIs can temporarily disagree about the Markdown spelling of the same link. The current comparison resolves only confirmed note aliases in link destinations; it preserves labels, titles, code examples and all other content differences.
 
 ## Regression details
 

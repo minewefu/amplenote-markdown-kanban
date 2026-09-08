@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createBoardService, prepareRewrite, assertTasksPreserved, journalKey } from "../service.mjs";
+import { createBoardService, prepareRewrite, assertTasksPreserved, journalKey, canonicalTaskContent } from "../service.mjs";
 import { parseBoard, moveCard, applyEdits } from "../core.mjs";
 
 const noteUUID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -185,4 +185,27 @@ test("a transient Markdown projection settles with read retries and no writes", 
   assert.ok(snapshot.source.startsWith('\n# Backlog'));
   assert.equal(app.writes(),0);
   assert.equal(snapshot.tasks.length,3);
+});
+
+test("resolved local links compare by confirmed identity without changing labels or code",async()=>{
+  const local='local-44444444-4444-4444-8444-444444444444',real='55555555-5555-4555-8555-555555555555';
+  const url='https://www.amplenote.com/notes/'+local,target='https://www.amplenote.com/notes/'+real;
+  const app={notes:{find:async id=>id===local?{uuid:real}:null}};
+  const content=`[${url}](${url} "${url}") and \`${url}\``;
+  assert.equal(await canonicalTaskContent(app,content),`[${url}](${target} "${url}") and \`${url}\``);
+  assert.equal(await canonicalTaskContent({notes:{find:async()=>null}},content),content);
+});
+
+test("a stale task cache's local link does not hide actual text edits",async()=>{
+  const local='local-44444444-4444-4444-8444-444444444444',real='55555555-5555-4555-8555-555555555555';
+  const localContent=`Active [Note](https://www.amplenote.com/notes/${local})`,realContent=`Active [Note](https://www.amplenote.com/notes/${real})`;
+  const app=host({onRead:md=>md.replace('- [ ] Active<!--','- [ ] '+realContent+'<!--')});
+  const getMany=app.getNoteTasks,getOne=app.getTask,find=app.notes.find;
+  app.notes.find=async id=>id===local?{uuid:real}:find(id);
+  app.getNoteTasks=async()=> (await getMany()).map(task=>task.uuid===active.uuid?{...task,content:realContent}:task);
+  app.getTask=async id=>{const task=await getOne(id);return id===active.uuid?{...task,content:localContent}:task;};
+  const result=await createBoardService().snapshot(app,noteUUID);
+  assert.equal(result.tasks.find(task=>task.uuid===active.uuid).content,realContent);
+  app.getTask=async id=>{const task=await getOne(id);return id===active.uuid?{...task,content:localContent+' changed'}:task;};
+  await assert.rejects(createBoardService().snapshot(app,noteUUID),/content/);
 });
