@@ -11,4 +11,4 @@ const bytes = await readFile("dist/kanban-core.js");
 await writeFile("dist/core-manifest.json", JSON.stringify({ version: "0.1.0", bytes: bytes.length,
   sha256: createHash("sha256").update(bytes).digest("hex"), installablePlugin: false,
   hostWritesVerified: false }, null, 2) + "\n");
-console.log(`Built development core: ${bytes.length} bytes. Host adapter and board UI remain unfinished.`);
+console.log(`Built development core: ${bytes.length} bytes. Full interface host validation remains in progress.`);
