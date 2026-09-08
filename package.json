@@ -1,0 +1,24 @@
+{
+  "name": "amplenote-markdown-kanban",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Markdown-backed Kanban development candidate for Amplenote",
+  "scripts": {
+    "test": "node build.mjs && node build-plugin.mjs && node --test test/*.test.mjs",
+    "build": "node build.mjs && node build-plugin.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "dompurify": "3.4.15",
+    "mdast-util-from-markdown": "2.0.3",
+    "mdast-util-gfm": "3.1.0",
+    "micromark-extension-gfm": "3.0.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  }
+}

@@ -1,0 +1,5 @@
+node_modules/
+dist/*
+!dist/plugin.js
+!dist/PLUGIN_NOTE.md
+!dist/plugin-manifest.json
