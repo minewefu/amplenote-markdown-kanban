@@ -1,5 +1,6 @@
 import DOMPurify from "dompurify";
 import { mountPreview } from "./preview-client.mjs";
+import { formatDatePattern } from "../date-format.mjs";
 
 if (document.getElementById("preview-state")) {
   mountPreview();
@@ -35,6 +36,7 @@ function showError(error) {
 function dateText(seconds) {
   if (seconds == null) return "";
   const date = new Date(seconds * 1000);
+  if(state.settings?.dateFormat==="custom")return formatDatePattern(date,state.settings.datePattern||"YYYY-MM-DD");
   if (state.settings?.dateFormat === "iso") return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
   if (state.settings?.dateFormat === "relative") {
     const days = Math.round((date.setHours(0,0,0,0) - new Date().setHours(0,0,0,0)) / 86400000);
@@ -115,16 +117,18 @@ function cardNode(card, column) {
   });
   cardElement.addEventListener("dragend", () => cardElement.classList.remove("dragging"));
   cardElement.addEventListener("keydown", event => { if (event.target === cardElement && event.key === "Enter") showTaskEditor(card); });
+  cardElement.addEventListener("click", event => { if (!event.target.closest("a,button,select,input,textarea")) showTaskEditor(card); });
   const content = element("div", "card-content");
   content.innerHTML = DOMPurify.sanitize(card.html || "", {USE_PROFILES:{html:true},ADD_ATTR:["description","data-href"],FORBID_TAGS:["input","button","textarea","select","style","form"]});
   const images = [...content.querySelectorAll("img")];
+  let preview=null;
   if (images.length) {
-    const preview = images[0].cloneNode(true);
-    preview.className = "card-preview";
-    preview.loading = "lazy";
-    cardElement.append(preview);
+    preview = images[0].cloneNode(true);
     images.forEach(image=>image.remove());
+  } else if(card.image?.url) {
+    try { const url=new URL(card.image.url); if(["https:","http:"].includes(url.protocol)){preview=element("img");preview.src=url.href;preview.alt=card.image.alt||"";} } catch {}
   }
+  if(preview){preview.className="card-preview";preview.loading="lazy";}
   content.addEventListener("click", event => {
     const link = event.target.closest("a");
     if (link) {
@@ -138,7 +142,7 @@ function cardNode(card, column) {
         event.preventDefault();
         call("openLink",{url:link.href},{update:false}).catch(showError);
       }
-    } else showTaskEditor(card);
+    }
   });
   cardElement.append(content);
   const meta = element("div", "card-meta");
@@ -160,12 +164,16 @@ function cardNode(card, column) {
   move.addEventListener("change",()=>{ const target=move.value; if(target) call("move",{cardId:card.uuid,columnId:target}).catch(showError); move.value=""; });
   controls.append(move,button("Edit",()=>showTaskEditor(card),"quiet"),button(card.completedAt != null ? "Reopen" : "Complete",()=>call(card.completedAt != null ? "reopen" : "complete",{cardId:card.uuid}),"quiet complete-button"));
   cardElement.append(controls);
+  if(preview)cardElement.append(preview);
   return cardElement;
 }
 function render() {
   byId("board-title").textContent = state.note.name || "Untitled board";
   byId("source-link").href = `https://www.amplenote.com/notes/${state.note.uuid}`;
   byId("date-format").value = state.settings?.dateFormat || "locale";
+  byId("date-pattern").value=state.settings?.datePattern||"YYYY-MM-DD";
+  byId("date-pattern").hidden=state.settings?.dateFormat!=="custom";
+  byId("apply-date-pattern").hidden=state.settings?.dateFormat!=="custom";
   const pending = byId("pending");
   pending.hidden = !state.pending;
   byId("acknowledge").hidden = state.pending?.phase !== "restored-needs-review";
@@ -220,7 +228,12 @@ function render() {
 search.addEventListener("input",render);
 byId("refresh").addEventListener("click",()=>call("refresh").catch(showError));
 byId("add-column").addEventListener("click",()=>showColumnEditor(null));
-byId("date-format").addEventListener("change",event=>call("settings",{dateFormat:event.target.value}).catch(showError));
+byId("date-format").addEventListener("change",event=>{
+  if(event.target.value==="custom"){byId("date-pattern").hidden=false;byId("apply-date-pattern").hidden=false;byId("date-pattern").focus();}
+  else call("settings",{dateFormat:event.target.value}).catch(showError);
+});
+byId("apply-date-pattern").addEventListener("click",()=>call("settings",{dateFormat:"custom",datePattern:byId("date-pattern").value}).catch(showError));
+byId("date-pattern").addEventListener("keydown",event=>{if(event.key==="Enter"){event.preventDefault();byId("apply-date-pattern").click();}});
 byId("restore").addEventListener("click",()=>call("recover").catch(showError));
 byId("acknowledge").addEventListener("click",()=>call("acknowledgeRecovery").catch(showError));
 document.querySelectorAll("[data-close]").forEach(node=>node.addEventListener("click",()=>node.closest("dialog").close()));

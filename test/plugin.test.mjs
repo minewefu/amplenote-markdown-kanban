@@ -113,3 +113,11 @@ test("link navigation uses the host API, reports rejection and rejects executabl
   const rejected=await plugin.onEmbedCall(app,'openLink',{noteUUID:uuid,url:'https://example.com/help'});
   assert.equal(rejected.ok,false);assert.match(rejected.message,/could not open/);
 });
+
+test("an embed's local note alias resolves to the same saved board",async()=>{
+  const app=host(),find=app.notes.find;app.notes.find=async input=>find(input==='local-'+uuid?uuid:input);
+  app.context.embedArgs=['board','local-'+uuid];
+  const result=await createPlugin().onEmbedCall(app,'refresh',{noteUUID:'local-'+uuid});
+  assert.equal(result.ok,true,result.message);
+  assert.equal(result.data.note.uuid,uuid);
+});

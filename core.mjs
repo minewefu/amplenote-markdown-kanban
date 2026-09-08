@@ -140,7 +140,14 @@ export function moveCard(source, cardId, columnId, { beforeCardId = null, limit 
   const board = parseBoard(source), card = requireCard(board, cardId), column = requireColumn(board, columnId);
   validateLimits(column, card, limit);
   if (beforeCardId === cardId) return source;
-  const before = beforeCardId == null ? null : requireCard(board, beforeCardId);
+  let before = beforeCardId == null ? null : board.cards.find(card => card.id === beforeCardId);
+  if (beforeCardId && !before) {
+    const archived = board.allTaskRecords.find(record => record.uuid === beforeCardId && record.metadata.completedAt != null);
+    if (!(column.id === board.columns.at(-1).id && archived)) throw new BoardError("This card changed. Refresh the board.");
+    // Completed cards are rendered in the final lane, but their actual storage
+    // is the generated archive. A drop over one means append and complete.
+    before = null;
+  }
   if (before && before.columnId !== columnId) throw new BoardError("The drop position is in another column.");
   const destination = before?.start ?? column.end;
   const end = endOfLine(source, card.end);
@@ -232,11 +239,24 @@ export function markdownLinks(markdown) {
   return links;
 }
 
+export function markdownImages(markdown) {
+  const tree=parser.parse(markdown),definitions=new Map(),images=[];
+  const definitionsIn=node=>{if(node.type==="definition")definitions.set(node.identifier,node.url);for(const child of node.children??[])definitionsIn(child);};
+  definitionsIn(tree);
+  const visit=node=>{
+    if(node.type==="image")images.push({url:node.url,alt:node.alt||""});
+    if(node.type==="imageReference"&&definitions.has(node.identifier))images.push({url:definitions.get(node.identifier),alt:node.alt||""});
+    for(const child of node.children??[])visit(child);
+  };
+  visit(tree);
+  return images;
+}
+
 export function noteLinkUuid(url) {
   try {
     const parsed = new URL(url);
     if (parsed.origin !== "https://www.amplenote.com") return null;
     const match = parsed.pathname.match(/^\/notes\/([^/]+)\/?$/);
-    return match && UUID.test(match[1]) ? match[1] : null;
+    return match && UUID.test(match[1].startsWith("local-") ? match[1].slice(6) : match[1]) ? match[1] : null;
   } catch { return null; }
 }

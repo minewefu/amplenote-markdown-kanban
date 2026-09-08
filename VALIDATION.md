@@ -4,7 +4,7 @@ Development checkpoint: September 8, 2026. This is not a claim of full interface
 
 ## Verified
 
-- 54 local tests pass on Node.js 24 on Windows.
+- 60 local tests pass on Node.js 24 on Windows.
 - The complete generated plugin initializes in an isolated environment without a DOM.
 - The write service, installed in Amplenote, moved an original card through three headings while retaining all three control-task IDs and their dates.
 - A deliberate failure of hidden-date restoration preserved all tasks and a durable recovery record. A fresh service invocation read that record and restored the date; review acknowledgment cleared it.
@@ -17,6 +17,8 @@ The first interface run found that Amplenote's iframe disallows native form subm
 The remaining live matrix includes card creation/editing, dates, drag and keyboard moves, completion/reopening, column operations and limits, rich footnotes, note labels, note creation, image previews, refresh/concurrent edits, and mobile/responsive behavior. Demonstration recordings and directory publication remain unfinished.
 
 A rich-footnote sidebar rendered its formatted description successfully. Ordinary popup navigation was blocked by the iframe sandbox; host-mediated URL navigation is being tested and must not yet be treated as fully verified.
+
+Automatic completion on moving into Done and reopening preserved the original task identity. An existing note was linked successfully. Native note creation exposed temporary `local-` note IDs; current code uses the host's note-URL API and resolves supported aliases. Alias handling, custom date patterns and bottom-of-card image previews need the remaining live tests.
 
 ## Regression details
 

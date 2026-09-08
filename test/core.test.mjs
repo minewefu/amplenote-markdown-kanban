@@ -127,3 +127,12 @@ test("native multiline task metadata at the end of a hard-break paragraph is rec
   assert.equal(board.cards[0].uuid, A);
   assert.equal(parseBoard(moveCard(md, A, heading(md, "Next"))).cards[0].raw, board.cards[0].raw);
 });
+
+test("dropping onto a completed card appends in the final heading without moving the archive", () => {
+  const archive=`# Completed tasks<!-- {"omit":true} -->\n\n${taskB}\n\n`;
+  const md=`# Backlog\n\n${taskA}\n\n# Done\n\n${archive}${footer}`;
+  const result=moveCard(md,A,heading(md,"Done"),{beforeCardId:B});
+  assert.equal(parseBoard(result).columns.at(-1).cards[0].uuid,A);
+  assert.equal(parseBoard(result).suffix,archive+footer);
+  assert.throws(()=>moveCard(md,A,"unassigned",{beforeCardId:B}),/changed/);
+});

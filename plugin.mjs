@@ -1,6 +1,6 @@
 import * as Core from "./core.mjs";
 import { createBoardService } from "./service.mjs";
-import { appendNoteLink, encodeState, firstTagColor, renderRichDescription } from "./format.mjs";
+import { appendNoteLink, encodeState, firstTagColor, imageUrl, renderRichDescription } from "./format.mjs";
 import { renderPage } from "./dist/ui-template.mjs";
 
 const configKey = uuid => `kanban.board.${uuid}`;
@@ -14,7 +14,7 @@ export function createPlugin() {
     if (!value || typeof value!=="object" || Array.isArray(value)) value={};
     const limits={};
     for(const [key,limit] of Object.entries(value.limits || {}))if(validLimit(limit))limits[key]=limit;
-    return {dateFormat:["locale","iso","relative"].includes(value.dateFormat)?value.dateFormat:"locale",limits};
+    return {dateFormat:["locale","iso","relative","custom"].includes(value.dateFormat)?value.dateFormat:"locale",datePattern:typeof value.datePattern==="string"&&value.datePattern.length<=80?value.datePattern:"YYYY-MM-DD",limits};
   };
   const saveConfig = async (app, uuid, value) => {
     await app.setSetting(configKey(uuid), JSON.stringify(value));
@@ -39,7 +39,8 @@ export function createPlugin() {
         if (linked) label = {name:linked.name || "Untitled note",url:`https://www.amplenote.com/notes/${linked.uuid}`,color:firstTagColor(linked,tags)};
       }
       const childCount = card.start == null ? 0 : snapshot.board.taskRecords.filter(record=>record.range[0]>card.start && record.range[1]<=card.end).length-1;
-      column.cards.push({uuid:task.uuid,title:card.title,content:task.content,html:await app.htmlFromContent(task.content),columnId:column.id,startAt:task.startAt??null,hideUntil:task.hideUntil??null,completedAt:task.completedAt??null,label,childCount:Math.max(0,childCount),_order:entries.findIndex(entry=>entry.task?.uuid===task.uuid)});
+      const firstImage=Core.markdownImages(task.content).find(image=>imageUrl(image.url));
+      column.cards.push({uuid:task.uuid,title:card.title,content:task.content,html:await app.htmlFromContent(task.content),columnId:column.id,startAt:task.startAt??null,hideUntil:task.hideUntil??null,completedAt:task.completedAt??null,label,image:firstImage?{url:imageUrl(firstImage.url),alt:firstImage.alt}:null,childCount:Math.max(0,childCount),_order:entries.findIndex(entry=>entry.task?.uuid===task.uuid)});
     }));
     for (const column of columns) { column.cards.sort((a,b)=>a._order-b._order); for(const card of column.cards)delete card._order; }
     return {note:snapshot.note,source:snapshot.source,columns,settings:options,pending:snapshot.pending};
@@ -105,8 +106,9 @@ export function createPlugin() {
     if(snapshot.pending)throw Error("Restore and review the interrupted save before editing.");
     let createdTaskId=null;
     if(action==="settings") {
-      if(!["locale","iso","relative"].includes(request.dateFormat))throw Error("Choose a supported date format.");
-      await saveConfig(app,uuid,{...config(app,uuid),dateFormat:request.dateFormat});
+      if(!["locale","iso","relative","custom"].includes(request.dateFormat))throw Error("Choose a supported date format.");
+      if(request.dateFormat==="custom"&&(typeof request.datePattern!=="string"||!request.datePattern.trim()||request.datePattern.length>80))throw Error("Enter a date pattern of 1 to 80 characters.");
+      await saveConfig(app,uuid,{...config(app,uuid),dateFormat:request.dateFormat,...(request.dateFormat==="custom"?{datePattern:request.datePattern}: {})});
     } else if(action==="move") {
       await move(app,uuid,snapshot,request.cardId,request.columnId,request.beforeCardId||null);
     } else if(action==="complete" || action==="reopen") {
@@ -168,7 +170,8 @@ export function createPlugin() {
       }
       if(!note)throw Error("The selected note is unavailable.");
       Core.assertFresh(request.expected,await app.getNoteContent({uuid}));
-      await updateTask(app,request.cardId,{content:appendNoteLink(task.content,note.name,note.uuid)});
+      const noteURL=await app.getNoteURL({uuid:note.uuid});
+      await updateTask(app,request.cardId,{content:appendNoteLink(task.content,note.name,noteURL)});
     } else throw Error("Unknown board action.");
     return {changed:true,createdTaskId};
   }
@@ -190,12 +193,16 @@ export function createPlugin() {
       return renderPage("board",encodeState(data));
     },
     async onEmbedCall(app,action,request) {
-      const uuid=request?.noteUUID;
+      let uuid=request?.noteUUID;
       let authorized=false;
       try {
         const embedUUID=app.context.embedArgs?.[1] || app.context.noteUUID;
         const embedded=await app.notes.find(embedUUID);
-        if(!embedded || embedded.uuid!==uuid)throw Error("This command does not match the open board.");
+        if(typeof uuid!=="string")throw Error("This command does not identify a note.");
+        const requested=await app.notes.find(uuid);
+        if(!embedded || !requested || embedded.uuid!==requested.uuid)throw Error("This command does not match the open board.");
+        uuid=embedded.uuid;
+        request={...request,noteUUID:uuid};
         authorized=true;
         if(busy.has(uuid))throw Error("A command for this board is already running.");
         busy.add(uuid);

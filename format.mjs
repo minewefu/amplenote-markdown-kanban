@@ -2,9 +2,10 @@ import { markdownLinks, noteLinkUuid, parseBoard } from "./core.mjs";
 export const escapeHtml = text => String(text ?? "").replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
 export const escapeMarkdown = text => String(text).replace(/[\\`*_{}\[\]<>#!|]/g,"\\$&");
 export const encodeState = value => JSON.stringify(value).replace(/</g,"\\u003c").replace(/\u2028/g,"\\u2028").replace(/\u2029/g,"\\u2029");
-export function appendNoteLink(content, name, uuid) {
-  const url = `https://www.amplenote.com/notes/${uuid}`;
-  if (!noteLinkUuid(url)) throw Error("The selected note has no permanent UUID yet.");
+export function appendNoteLink(content, name, noteIdOrUrl) {
+  const url = String(noteIdOrUrl).includes("://") ? String(noteIdOrUrl) : `https://www.amplenote.com/notes/${noteIdOrUrl}`;
+  const uuid=noteLinkUuid(url);
+  if (!uuid) throw Error("The selected note URL is invalid.");
   if (markdownLinks(content).some(link => noteLinkUuid(link.url) === uuid)) return content;
   const footerStart = parseBoard(content).footerStart;
   return content.slice(0,footerStart).trimEnd() + ` [${escapeMarkdown(name || "Untitled note")}](${url})` + (footerStart < content.length ? "\n\n" + content.slice(footerStart) : "");
@@ -45,4 +46,9 @@ export function renderRichDescription(description) {
 export function firstTagColor(note, tags) {
   const color = tags.find(tag => tag.text === note.tags?.[0])?.color;
   return typeof color === "string" && /^[a-f0-9]{6}$/i.test(color) ? "#" + color : null;
+}
+
+export function imageUrl(url) {
+  try { const parsed=new URL(String(url)); return ["https:","http:"].includes(parsed.protocol)?parsed.href:null; }
+  catch { return null; }
 }

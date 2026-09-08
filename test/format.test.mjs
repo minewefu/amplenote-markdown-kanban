@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { appendNoteLink, encodeState, renderRichDescription, firstTagColor } from "../format.mjs";
-import { markdownLinks, noteLinkUuid, columnKeys, parseBoard } from "../core.mjs";
+import { appendNoteLink, encodeState, renderRichDescription, firstTagColor, imageUrl } from "../format.mjs";
+import { markdownLinks, markdownImages, noteLinkUuid, columnKeys, parseBoard } from "../core.mjs";
 
 const uuid="11111111-1111-4111-8111-111111111111";
 test("card labels are inserted before footnotes and do not duplicate existing links",()=>{
@@ -44,4 +44,18 @@ test("semantic column keys survive source offsets and disambiguate duplicates",(
   const a=columnKeys(parseBoard(md)),b=columnKeys(parseBoard('Intro\n\n'+md));
   assert.deepEqual(a.map(column=>column.key),b.map(column=>column.key));
   assert.notEqual(a[1].key,a[2].key);
+});
+
+test("new-note URLs retain supported local aliases until the host resolves them",()=>{
+  const local='local-'+uuid,url='https://www.amplenote.com/notes/'+local;
+  assert.equal(noteLinkUuid(url),local);
+  assert.equal(appendNoteLink('Card','New note',url),`Card [New note](${url})`);
+  assert.equal(noteLinkUuid('https://www.amplenote.com/notes/local-not-a-uuid'),null);
+});
+
+test("image previews find inline, referenced and rich-footnote images in order",()=>{
+  const md='![First](https://example.com/one.png)\n\n![Second][picture]\n\n[detail][^1]\n\n[picture]: https://example.com/two.png\n\n[^1]: [detail]()\n\n    ![Third](https://example.com/three.png)\n';
+  assert.deepEqual(markdownImages(md).map(image=>image.alt),['First','Second','Third']);
+  assert.equal(imageUrl('javascript:alert(1)'),null);
+  assert.equal(imageUrl('https://example.com/one.png'),'https://example.com/one.png');
 });

@@ -22,6 +22,8 @@ Import `dist/PLUGIN_NOTE.md` through Amplenote's Markdown importer, then select 
 
 Use a dedicated test note while interface validation is in progress. The current validation scope is recorded in `VALIDATION.md`.
 
+Date display includes local, ISO and relative presets, plus custom patterns such as `DD/MM/YYYY HH:mm`. Month/weekday names use the browser locale; text in `[brackets]` is literal. Image previews appear at the bottom of cards.
+
 ## Preservation and recovery
 
 The parser retains original Markdown spans, including opaque task metadata and rich footnotes. Completed-task export sections remain separate from user headings. Parent cards keep nested tasks attached when moved.
