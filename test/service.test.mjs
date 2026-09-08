@@ -177,3 +177,12 @@ test("a native string-valued null setting is treated as a cleared journal", asyn
   assert.equal(result.pending,null);
   assert.equal(app.writes(),1);
 });
+
+test("a transient Markdown projection settles with read retries and no writes", async () => {
+  let reads=0;
+  const app=host({onRead:markdown=>++reads===2?'\n'+markdown:markdown});
+  const snapshot=await createBoardService().snapshot(app,noteUUID);
+  assert.ok(snapshot.source.startsWith('\n# Backlog'));
+  assert.equal(app.writes(),0);
+  assert.equal(snapshot.tasks.length,3);
+});

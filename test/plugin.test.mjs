@@ -74,3 +74,16 @@ test("the complete bundle creates its actions in a DOM-free plugin worker",async
   assert.equal(typeof plugin._get().renderEmbed,'function');
   assert.equal(typeof plugin.noteOption['Open Kanban'],'function');
 });
+
+test("a post-insertion read failure reports the existing task ID for safe editing",async()=>{
+  const app=host(),expected=app.source(),createdId='22222222-2222-4222-8222-222222222222';
+  let inserted=0;
+  const originalRead=app.getNoteContent;
+  app.insertTask=async()=>{inserted++;return createdId;};
+  app.getNoteContent=async()=>{if(inserted)throw Error('Temporary host read failure');return originalRead();};
+  const result=await createPlugin().onEmbedCall(app,'add',{noteUUID:uuid,expected,columnId:'column:0',content:'New card',startAt:null});
+  assert.equal(result.ok,false);
+  assert.equal(result.createdTaskId,createdId);
+  assert.match(result.message,/card was created/);
+  assert.equal(inserted,1);
+});

@@ -119,11 +119,21 @@ export function createBoardService() {
   async function snapshot(app, uuid) {
     const note = await app.notes.find(uuid);
     if (!note) throw new BoardError("This note no longer exists.");
-    const source = await app.getNoteContent({ uuid: note.uuid });
-    const tasks = await readTasks(app, note.uuid);
-    assertFresh(source, await app.getNoteContent({ uuid: note.uuid }));
-    assertSourceDates(source, tasks);
-    return { note: { uuid: note.uuid, name: note.name }, source, board: parseBoard(source), tasks, pending: readJournal(app, note.uuid) };
+    const pending = readJournal(app, note.uuid);
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const source = await app.getNoteContent({ uuid: note.uuid });
+        const tasks = await readTasks(app, note.uuid);
+        assertFresh(source, await app.getNoteContent({ uuid: note.uuid }));
+        assertSourceDates(source, tasks);
+        return { note: { uuid: note.uuid, name: note.name }, source, board: parseBoard(source), tasks, pending };
+      } catch (error) {
+        // A native insertion can finish while its Markdown projection is still
+        // settling. Retry coherent reads only; never retry a mutation here.
+        if (!(error instanceof BoardError) || attempt === 2) throw error;
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+    }
   }
   async function rewrite(app, uuid, expected, transform) {
     if (!uuid || uuid.startsWith("local-")) throw new BoardError("Wait for this new note to finish saving, then refresh the board.");

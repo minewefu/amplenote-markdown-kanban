@@ -118,10 +118,11 @@ export function createPlugin() {
       const target=snapshot.board.columns.find(column=>column.id===request.columnId);
       if(limit && target?.cards.filter(card=>!card.checked).length>=limit)throw Error("This column has reached its open-card limit.");
       const taskId=await app.insertTask({uuid},{content:request.content,startAt:request.startAt});
-      snapshot=await service.snapshot(app,uuid);
-      const column=Core.columnKeys(snapshot.board).find(column=>column.key===key);
-      try { await move(app,uuid,snapshot,taskId,key==="completed"?"completed":column.id,null); }
-      catch(error){throw Error("The new card was created; its move needs review. "+(error?.message??String(error)));}
+      try {
+        snapshot=await service.snapshot(app,uuid);
+        const column=Core.columnKeys(snapshot.board).find(column=>column.key===key);
+        await move(app,uuid,snapshot,taskId,key==="completed"?"completed":column.id,null);
+      } catch(error){const failure=Error("The card was created, but its placement needs review. Refresh and move the existing card. "+(error?.message??String(error)));failure.createdTaskId=taskId;throw failure;}
     } else if(["addColumn","editColumn","deleteColumn","reorderColumn"].includes(action)) {
       const options={...config(app,uuid),limits:{...config(app,uuid).limits}};
       const columns=Core.columnKeys(snapshot.board);
@@ -191,7 +192,11 @@ export function createPlugin() {
         if(busy.has(uuid))throw Error("A command for this board is already running.");
         busy.add(uuid);
         try{return {ok:true,data:await dispatch(app,action,request)};}finally{busy.delete(uuid);}
-      } catch(error) {let pending=null;if(authorized){try{pending=service.pending(app,uuid);}catch{}}return {ok:false,message:error?.message??String(error),pending};}
+      } catch(error) {
+        let pending=null,data=null;
+        if(authorized){try{pending=service.pending(app,uuid);}catch{}if(error?.createdTaskId){try{data=await view(app,uuid);}catch{}}}
+        return {ok:false,message:error?.message??String(error),pending,data,createdTaskId:authorized?error?.createdTaskId??null:null};
+      }
     }
   };
 }

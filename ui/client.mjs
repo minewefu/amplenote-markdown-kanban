@@ -57,6 +57,7 @@ async function call(action, args = {}, { update = true } = {}) {
   try {
     const result = await window.callAmplenotePlugin(action, {noteUUID:state.note.uuid,expected:state.source,...args});
     if (!result?.ok) {
+      if (result?.createdTaskId) { byId("card-id").value=result.createdTaskId; byId("editor-title").textContent="Edit card"; }
       if (result?.data && update) { state = result.data; render(); }
       else if(result?.pending && update){state.pending=result.pending;render();}
       throw Error(result?.message || "The action could not be completed.");
