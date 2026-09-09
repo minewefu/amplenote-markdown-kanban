@@ -1,6 +1,7 @@
 import DOMPurify from "dompurify";
 import { mountPreview } from "./preview-client.mjs";
 import { formatDatePattern } from "../date-format.mjs";
+import { attachFootnoteMetadata } from "./link-metadata.mjs";
 
 if (document.getElementById("preview-state")) {
   mountPreview();
@@ -120,6 +121,7 @@ function cardNode(card, column) {
   cardElement.addEventListener("click", event => { if (!event.target.closest("a,button,select,input,textarea")) showTaskEditor(card); });
   const content = element("div", "card-content");
   content.innerHTML = DOMPurify.sanitize(card.html || "", {USE_PROFILES:{html:true},ADD_ATTR:["description","data-href"],FORBID_TAGS:["input","button","textarea","select","style","form"]});
+  attachFootnoteMetadata(content,card.links);
   const images = [...content.querySelectorAll("img")];
   let preview=null;
   if (images.length) {
@@ -132,7 +134,10 @@ function cardNode(card, column) {
   content.addEventListener("click", event => {
     const link = event.target.closest("a");
     if (link) {
-      if (link.getAttribute("description")) {
+      if(link.dataset.footnoteId && link.dataset.footnoteContent==="1"){
+        event.preventDefault();
+        call("richFootnote",{cardId:card.uuid,footnoteId:link.dataset.footnoteId},{update:false}).catch(showError);
+      } else if (link.getAttribute("description")) {
         event.preventDefault();
         call("richFootnote", {description:link.getAttribute("description"),href:link.getAttribute("data-href") || link.getAttribute("href"),label:link.textContent},{update:false}).catch(showError);
       } else if (link.href.startsWith("https://www.amplenote.com/notes/")) {

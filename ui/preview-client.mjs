@@ -1,9 +1,11 @@
 import DOMPurify from "dompurify";
+import { attachFootnoteMetadata } from "./link-metadata.mjs";
 export function mountPreview() {
 const state=JSON.parse(document.getElementById("preview-state").textContent);
 document.getElementById("preview-title").textContent=state.title || "Rich footnote";
 const body=document.getElementById("preview-body");
 body.innerHTML=DOMPurify.sanitize(state.html || "",{USE_PROFILES:{html:true},ADD_ATTR:["description","data-href"],FORBID_TAGS:["input","button","textarea","select","style","form"]});
+attachFootnoteMetadata(body,state.links);
 const source=document.getElementById("preview-source");
 try{const url=new URL(state.href);if(["https:","http:","mailto:"].includes(url.protocol)){source.href=url.href;source.hidden=false;}}catch{}
 async function send(action,payload){
@@ -14,7 +16,8 @@ source.addEventListener("click",event=>{event.preventDefault();send("openLink",{
 body.addEventListener("click",async event=>{
   const link=event.target.closest("a");if(!link)return;
   let action,payload;
-  if(link.getAttribute("description")){action="richFootnote";payload={description:link.getAttribute("description"),href:link.getAttribute("data-href") || link.href,label:link.textContent};}
+  if(link.dataset.footnoteId&&link.dataset.footnoteContent==="1"){action="richFootnote";payload={cardId:state.cardId,footnoteId:link.dataset.footnoteId};}
+  else if(link.getAttribute("description")){action="richFootnote";payload={description:link.getAttribute("description"),href:link.getAttribute("data-href") || link.href,label:link.textContent};}
   else if(link.href.startsWith("https://www.amplenote.com/notes/")){action="peekNote";payload={url:link.href};}
   else{action="openLink";payload={url:link.href};}
   if(!action)return;event.preventDefault();

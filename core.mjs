@@ -279,6 +279,50 @@ export function markdownLinkTargets(markdown) {
   return targets;
 }
 
+export function richFootnoteData(markdown) {
+  const tree=parser.parse(markdown);
+  const nodes=tree.children.filter(node=>node.type==="footnoteDefinition");
+  const definitions=[];
+  for(let index=0;index<nodes.length;index++){
+    const node=nodes[index],header=node.children[0]?.children?.find(child=>child.type==="link");
+    if(!header)continue;
+    const end=nodes[index+1]?.position.start.offset??markdown.length;
+    const lineEnd=markdown.indexOf("\n",header.position.end.offset);
+    const bodyStart=lineEnd>=0&&lineEnd<end?lineEnd+1:end;
+    const body=markdown.slice(bodyStart,end).replace(/^(?: {4}|\t)/gm,"").replace(/^(?:[ \t]*\r?\n)+/,"").replace(/(?:\r?\n[ \t]*)+$/,"");
+    definitions.push({id:node.identifier,label:textOf(header),href:header.url,markdown:body,hasContent:!!body.trim(),raw:markdown.slice(node.position.start.offset,end)});
+  }
+  const byId=new Map(definitions.map(definition=>[definition.id,definition]));
+  const referenceLabel=(node,fallback)=>{
+    const end=node.position.start.offset;
+    if(markdown[end-1]!=="]")return fallback;
+    let depth=0;
+    for(let index=end-1;index>=Math.max(0,end-1000);index--){
+      let slashes=0;for(let back=index-1;back>=0&&markdown[back]==="\\";back--)slashes++;
+      if(slashes%2)continue;
+      if(markdown[index]==="]")depth++;
+      if(markdown[index]==="["&&--depth===0){
+        const parsed=parser.parse(markdown.slice(index,end)+"(https://example.invalid)");
+        const link=parsed.children[0]?.children?.find(child=>child.type==="link");
+        return link?textOf(link):fallback;
+      }
+    }
+    return fallback;
+  };
+  const links=[],footerStart=nodes[0]?.position.start.offset??markdown.length;
+  const visit=node=>{
+    if(node.position?.start.offset>=footerStart)return;
+    if(node.type==="link")links.push({label:textOf(node),href:node.url,footnoteId:null,hasContent:false});
+    if(node.type==="footnoteReference"){
+      const definition=byId.get(node.identifier);
+      if(definition)links.push({label:referenceLabel(node,definition.label),href:definition.href,footnoteId:definition.id,hasContent:definition.hasContent});
+    }
+    for(const child of node.children??[])visit(child);
+  };
+  visit(tree);
+  return {definitions,links};
+}
+
 export function noteLinkUuid(url) {
   try {
     const parsed = new URL(url);

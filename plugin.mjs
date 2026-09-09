@@ -40,7 +40,7 @@ export function createPlugin() {
       }
       const childCount = card.start == null ? 0 : snapshot.board.taskRecords.filter(record=>record.range[0]>card.start && record.range[1]<=card.end).length-1;
       const firstImage=Core.markdownImages(task.content).find(image=>imageUrl(image.url));
-      column.cards.push({uuid:task.uuid,title:card.title,content:task.content,html:await app.htmlFromContent(task.content),columnId:column.id,startAt:task.startAt??null,hideUntil:task.hideUntil??null,completedAt:task.completedAt??null,label,image:firstImage?{url:imageUrl(firstImage.url),alt:firstImage.alt}:null,childCount:Math.max(0,childCount),_order:entries.findIndex(entry=>entry.task?.uuid===task.uuid)});
+      column.cards.push({uuid:task.uuid,title:card.title,content:task.content,html:await app.htmlFromContent(task.content),links:Core.richFootnoteData(task.content).links,columnId:column.id,startAt:task.startAt??null,hideUntil:task.hideUntil??null,completedAt:task.completedAt??null,label,image:firstImage?{url:imageUrl(firstImage.url),alt:firstImage.alt}:null,childCount:Math.max(0,childCount),_order:entries.findIndex(entry=>entry.task?.uuid===task.uuid)});
     }));
     for (const column of columns) { column.cards.sort((a,b)=>a._order-b._order); for(const card of column.cards)delete card._order; }
     return {note:snapshot.note,source:snapshot.source,columns,settings:options,pending:snapshot.pending};
@@ -96,8 +96,20 @@ export function createPlugin() {
       return {opened:true};
     }
     if(action==="richFootnote") {
-      const html=renderRichDescription(request.description);
-      const opened=await app.openSidebarEmbed({aspectRatio:0.8,id:"kanban-footnote"},"rich",uuid,{html,title:request.label,href:request.href});
+      let html,links=[],title=request.label,href=request.href;
+      if(request.footnoteId!=null){
+        const content=request.cardId?(await nativeTask(app,uuid,request.cardId)).content:await app.getNoteContent({uuid});
+        const data=Core.richFootnoteData(content),definition=data.definitions.find(definition=>definition.id===request.footnoteId);
+        if(!definition)throw Error("This rich footnote changed. Refresh the board.");
+        const markdown=definition.markdown+"\n\n"+data.definitions.filter(item=>item.id!==definition.id).map(item=>item.raw).join("\n\n");
+        html=await app.htmlFromContent(markdown);
+        links=Core.richFootnoteData(markdown).links;
+        title=definition.label;href=definition.href;
+      } else {
+        let parsed;try{parsed=JSON.parse(request.description);}catch{}
+        html=Array.isArray(parsed)?renderRichDescription(parsed):await app.htmlFromContent(String(request.description||""));
+      }
+      const opened=await app.openSidebarEmbed({aspectRatio:0.8,id:"kanban-footnote"},"rich",uuid,{html,links,title,href,cardId:request.cardId});
       if(!opened)throw Error("Open this rich footnote from the source note on mobile.");
       return {opened:true};
     }
@@ -185,7 +197,8 @@ export function createPlugin() {
       if(mode==="peek") {
         const note=await app.notes.find(uuid);
         if(!note)throw Error("The linked note is unavailable.");
-        const data={title:note.name,html:await app.htmlFromContent(await app.getNoteContent({uuid:note.uuid})),href:`https://www.amplenote.com/notes/${note.uuid}`,noteUUID:note.uuid};
+        const markdown=await app.getNoteContent({uuid:note.uuid});
+        const data={title:note.name,html:await app.htmlFromContent(markdown),links:Core.richFootnoteData(markdown).links,href:`https://www.amplenote.com/notes/${note.uuid}`,noteUUID:note.uuid};
         return renderPage("preview",encodeState(data));
       }
       if(mode==="rich")return renderPage("preview",encodeState({...details,noteUUID:uuid}));

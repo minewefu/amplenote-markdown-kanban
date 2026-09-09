@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import vm from "node:vm";
+import { JSDOM } from "jsdom";
 import { createPlugin } from "../plugin.mjs";
 
 const uuid="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",taskId="11111111-1111-4111-8111-111111111111",pluginId="bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
@@ -70,11 +71,13 @@ test("settings accept only supported date formats and tolerate native null recor
   const bad=await plugin.onEmbedCall(app,'settings',{noteUUID:uuid,expected:app.source(),dateFormat:'script'});
   assert.equal(bad.ok,false);
 });
-test("the complete bundle creates its actions in a DOM-free plugin worker",async()=>{
+test("the complete bundle creates its actions in the documented iframe environment",async()=>{
   const code=await readFile(new URL('../dist/plugin.js',import.meta.url),'utf8');
-  const plugin=vm.runInNewContext('('+code+')',{URL},{timeout:3000});
+  const dom=new JSDOM('');
+  const plugin=vm.runInNewContext('('+code+')',{URL,document:dom.window.document},{timeout:3000});
   assert.equal(typeof plugin._get().renderEmbed,'function');
   assert.equal(typeof plugin.noteOption['Open Kanban'],'function');
+  dom.window.close();
 });
 
 test("a post-insertion read failure reports the existing task ID for safe editing",async()=>{
@@ -120,4 +123,17 @@ test("an embed's local note alias resolves to the same saved board",async()=>{
   const result=await createPlugin().onEmbedCall(app,'refresh',{noteUUID:'local-'+uuid});
   assert.equal(result.ok,true,result.message);
   assert.equal(result.data.note.uuid,uuid);
+});
+
+test("mixed rich footnotes use native Markdown rendering rather than parsing an HTML attribute",async()=>{
+  const app=host(),plugin=createPlugin();
+  const content='Read [detail][^1]\n\n[^1]: [detail](https://example.com)\n\n    **Body**\n\n    ![](https://example.com/image.png)\n';
+  const getTasks=app.getNoteTasks;
+  app.getNoteTasks=async()=> (await getTasks()).map(task=>({...task,content}));
+  const rendered=[];app.htmlFromContent=async markdown=>{rendered.push(markdown);return '<p>Native rendered body</p>';};
+  const result=await plugin.onEmbedCall(app,'richFootnote',{noteUUID:uuid,cardId:taskId,footnoteId:'1',description:'not JSON'});
+  assert.equal(result.ok,true,result.message);
+  assert.ok(rendered[0].includes('**Body**'));
+  assert.ok(rendered[0].includes('![](https://example.com/image.png)'));
+  assert.equal(app.calls.find(call=>call[0]==='sidebar').at(-1).html,'<p>Native rendered body</p>');
 });

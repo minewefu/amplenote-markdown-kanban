@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 await import("./build-ui.mjs");
 await import("./build-notices.mjs");
 const { createPlugin } = await import("./plugin.mjs");
-const output=(await build({entryPoints:["plugin.mjs"],bundle:true,write:false,platform:"browser",conditions:["worker"],format:"iife",globalName:"KanbanPlugin",minify:true,target:"es2022",legalComments:"inline"})).outputFiles[0].text;
+const output=(await build({entryPoints:["plugin.mjs"],bundle:true,write:false,platform:"browser",format:"iife",globalName:"KanbanPlugin",minify:true,target:"es2022",legalComments:"inline"})).outputFiles[0].text;
 const delegates=["appOption","noteOption"].map(type=>`${type}:{${Object.keys(createPlugin()[type]).map(name=>`${JSON.stringify(name)}:async function(...args){const p=this._get();return p[${JSON.stringify(type)}][${JSON.stringify(name)}].apply(p,args);}`).join(",")}}`);
 for(const type of ["renderEmbed","onEmbedCall"])delegates.push(`${type}:async function(...args){const p=this._get();return p.${type}.apply(p,args);}`);
 const code=`{_instance:null,_get(){if(!this._instance){${output}\nthis._instance=KanbanPlugin.createPlugin();}return this._instance;},${delegates.join(",")}}`;
