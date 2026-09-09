@@ -1,35 +1,34 @@
 # Validation status
 
-Development checkpoint: September 8, 2026. This is not a claim of full interface validation or bounty acceptance.
+Development checkpoint: September 9, 2026. This package is not yet a completed bounty claim. Tested plugin source: commit `603b9b6aa6019cf07f402f6a6a625349c5bde974`.
 
 ## Verified
 
-- 66 local tests pass on Node.js 24 on Windows.
-- The complete generated plugin initializes in an isolated DOM harness matching Amplenote's documented iframe environment.
-- The write service, installed in Amplenote, moved an original card through three headings while retaining all three control-task IDs and their dates.
-- A deliberate failure of hidden-date restoration preserved all tasks and a durable recovery record. A fresh service invocation read that record and restored the date; review acknowledgment cleared it.
-- The complete board plugin was imported, its source was checked against the build, and it rendered a newly created board in the actual Amplenote app.
+- 66 local tests pass on Node.js 24 on Windows, including a clean dependency installation from the public checkout.
+- The generated plugin initializes in an isolated DOM harness and was installed in the actual Amplenote app. Its installed source matches the published build.
+- Live card creation and editing preserve native task identity, Markdown, note links and start dates. Acknowledged saves are followed by a separate fresh board read.
+- Keyboard movement, actual drag gestures, completion in the final column and reopening work. A drop onto an already completed card preserves both task identities and completes the moved task.
+- Column creation, renaming, reordering and deletion work. Deletion preserves tasks in Unassigned. A limit of one rejected a second open card; increasing it to two allowed the move.
+- Search matches rich-footnote body text, handles no matches and restores cards when cleared. Custom date patterns render and update.
+- Existing-note labels, new-note creation and temporary local-note alias resolution work. A label uses the linked note's first tag color; the configured and rendered values matched.
+- The first image appears at the bottom of its card. Mixed rich-footnote text and images render together in the Peek Viewer. Linked-note previews also render there.
+- At a 390 by 844 viewport, the toolbar wraps and the board scrolls horizontally to the remaining columns. The temporary viewport override was reset afterward.
+- The installed write service preserved control-task IDs and dates through note rewrites. An intentionally interrupted hidden-date restoration left a durable recovery record; a fresh invocation restored the date and explicit review acknowledgment cleared the record.
 
-## In progress
+## Outstanding
 
-The first interface run found that Amplenote's iframe disallows native form submission and JavaScript modal dialogs. The current source uses direct buttons and inline confirmation instead. Live card creation and keyboard movement now work. Post-insertion reads can settle after a native write. The service retries coherent reads, reports an existing task ID if placement fails, and acknowledges a verified write separately from the next board refresh. A refresh failure therefore does not ask the user to repeat a successful save. The latest acknowledgment/refresh change needs live retesting.
+- External HTTPS navigation fails in the host's sandbox. Ordinary new-window links are blocked, and host-mediated navigation rejected the tested Amplenote API-documentation URL and GitHub release URL. Support was asked which documented method is supported. These links must not be represented as verified.
+- Directory publication, program eligibility, sponsor acceptance and payment remain outstanding.
+- Simultaneous edits across independent clients cannot be made atomic with the documented API. Observed stale snapshots are rejected, but there is no native compare-and-swap transaction. A live multi-client race test has not been completed.
 
-The remaining live matrix includes card creation/editing, dates, drag and keyboard moves, completion/reopening, column operations and limits, rich footnotes, note labels, note creation, image previews, refresh/concurrent edits, and mobile/responsive behavior. Demonstration recordings and directory publication remain unfinished.
+## Demonstrations
 
-A rich-footnote sidebar rendered its formatted description successfully. Ordinary popup navigation was blocked by the iframe sandbox; host-mediated URL navigation is being tested and must not yet be treated as fully verified.
+The development release includes a usage overview of about 1 minute 55 seconds and a code overview of about 2 minutes 20 seconds. They are edited browser captures with narration; captured frames are held and paced for explanation. They are not uncut real-time recordings or a replacement for the validation evidence above. The source walkthrough shows the immutable tested commit and its earlier documentation; this document records the later completed checks.
 
-Automatic completion on moving into Done and reopening preserved the original task identity. An existing note was linked successfully. Native note creation exposed temporary `local-` note IDs; current code uses the host's note-URL API and resolves supported aliases. Alias handling, custom date patterns and bottom-of-card image previews need the remaining live tests.
+## Recovery details
 
-Creating and linking a new note now works with the temporary ID. When that ID resolves, task APIs can temporarily disagree about the Markdown spelling of the same link. The current comparison resolves only confirmed note aliases in link destinations; it preserves labels, titles, code examples and all other content differences.
+Native Markdown replacement dropped hidden controls with default options and with either tested combination of explicit include flags. Allowing completed-task replacement also removed a completed control. The service keeps completed-task replacement disabled, temporarily clears hidden dates in the replacement payload, and forces the native hidden-date updater through null before restoring each date.
 
-The first image preview loaded at the bottom of its card. Native image-rich footnotes exposed plain Markdown description attributes instead of the JSON shape observed for text-only footnotes. The current implementation identifies footnotes from the task's Markdown and renders their complete Markdown through Amplenote, including images. This latest sidebar change needs live verification.
+An individual-task response alone could retain an old cached date. Verification therefore requires saved Markdown, the task collection and individual-task reads to agree. A cleared native setting can be serialized as the string `null`; recovery handles that representation. Acknowledged writes are never silently replayed merely because the subsequent render fails.
 
-The build now uses the parser's browser export. The official execution-environment documentation specifies a sandboxed iframe with a DOM, so a DOM-free worker was an unnecessary earlier constraint. Tests cover the actual browser-oriented bundle with jsdom, and the change removes the large static entity table from the distributed plugin.
-
-## Regression details
-
-Identical native Markdown replacement dropped a hidden control with default options and with either tested combination of explicit include flags. Allowing completed-task replacement also removed the completed control. The service preserves completed tasks and temporarily clears hidden dates in its replacement payload, then forces the native hidden-date updater through null before restoring each date.
-
-An individual-task response alone initially produced a false restoration success because it could retain an old cached date. The corrected service requires saved Markdown, the task collection and individual task reads to agree. A cleared native setting can be serialized as the string `null`; the recovery reader handles that representation.
-
-Private fixture IDs and account-specific reports are retained in the development workspace rather than published here.
+Private fixture IDs and account-specific reports remain in the development workspace.

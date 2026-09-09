@@ -42,3 +42,7 @@ Original plugin code is MIT-licensed. Parser and sanitization dependencies retai
 - [Amplenote plugin API](https://www.amplenote.com/help/developing_amplenote_plugins/app_interface)
 - [Native Markdown reference](https://www.amplenote.com/help/plugin_api_markdown_reference_parse_markdown)
 - [Tag-color behavior](https://www.amplenote.com/help/color_calendar_events)
+
+## Development demonstrations
+
+[Usage and code-overview videos](https://github.com/minewefu/amplenote-markdown-kanban/releases/tag/development-demo-2026-09-09) accompany the tested development build. These edited, narrated browser captures show the board workflow and source structure. External HTTPS navigation and bounty submission remain outstanding; see `VALIDATION.md` for the current checks and limitations.
